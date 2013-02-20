@@ -9,11 +9,10 @@ class UnitsError(Exception):
 
 class UnitsNumber(numbers.Real):
     valid_units = None
-
     _error_messages = {
         'bad units':    'Invalid units {0}.'}
 
-    def __init__(self, value=None, units=None):
+    def __init__(self, value, units=None):
         self.value = value
         self.units = units
 
