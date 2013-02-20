@@ -27,14 +27,6 @@ class UnitsNumber(numbers.Real):
         else:
             raise UnitsError(self._error_messages['bad units'].format(units))
 
-    @property
-    def value(self):
-        return self.__value
-
-    @value.setter
-    def value(self, value):
-        self.__value = value
-
     # String and representational functions
     def __repr__(self):
         """
