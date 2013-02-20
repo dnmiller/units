@@ -2,7 +2,7 @@
 import unittest
 import random
 
-from units import UnitsNumber
+from units import UnitsNumber, UnitsError
 
 
 test_type_generators = (
@@ -113,15 +113,45 @@ class TestUnitNumber(unittest.TestCase):
             self.assertEqual(units, expected, msg.format(
                              op_name, units, expected, type(non_unit_a)))
 
+    def tearDown(self):
+        UnitsNumber.valid_units = None
+
     def test_units_set(self):
         """
         Setting units attribute behaves correctly.
         """
         UnitsNumber(0, 'ok')
+        UnitsNumber.valid_units = ('good',)
+        UnitsNumber(0, 'good')
+
+    def test_str_and_repr(self):
+        """
+        String representations correctly created.
+        """
+        num = UnitsNumber(value=0, units='ok')
+        expected = '0ok'
+        actual = str(num)
+        self.assertEqual(expected, actual)
+
+        expected = "UnitsNumber(value=0, units='ok')"
+        actual = num.__repr__()
+        self.assertEqual(expected, actual)
+        exec('expected = ' + num.__repr__())
+        self.assertEqual(expected, num)
+
+    def test_invalid_units(self):
+        """
+        Invalid units set wrong.
+        """
+        UnitsNumber.valid_units = ('good',)
+        bad_units = 'bad'
+        msg = UnitsNumber._error_messages['bad units'].format(bad_units)
+        self.assertRaisesRegexp(
+            UnitsError, msg, UnitsNumber, value=0, units=bad_units)
 
     def test_math_ops_with_no_units(self):
         """
-        Test math operations on unit-less numbers.
+        Math operations on unit-less numbers.
         """
         for i in xrange(100):
             for gen in test_type_generators:
