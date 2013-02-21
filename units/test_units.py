@@ -1,6 +1,7 @@
 # -*- coding: iso-8859-1 -*-
 import unittest
 import random
+from itertools import permutations
 
 from units import UnitsNumber, UnitsError
 
@@ -53,6 +54,7 @@ class TestUnitNumber(unittest.TestCase):
         self.assertEqual(non_unit_a, unit_a.value)
         self.assertEqual(non_unit_b, unit_b.value)
 
+        # Int types have __cmp__ in python 2.
         cmp_map = {
             '__lt__': {-1: True,  0: False, 1: False},
             '__le__': {-1: True,  0: True,  1: False},
@@ -78,6 +80,11 @@ class TestUnitNumber(unittest.TestCase):
         self.assertEqual(non_unit_a, unit_a.value)
         self.assertEqual(non_unit_b, unit_b.value)
 
+        # Zero is handled elsewhere.
+        if non_unit_a == 0.0:
+            non_unit_a = non_unit_a.__class__(1)
+            unit_a = unit_a.__class__(1, units=unit_a.units)
+
         # Cannot raise negative value to a fraction.
         abs_non_unit_a = abs(non_unit_a)
         abs_unit_a = UnitsNumber(value=abs_non_unit_a, units=unit_a.units)
@@ -85,16 +92,32 @@ class TestUnitNumber(unittest.TestCase):
         actual = pow(abs_unit_a, unit_b)
         self.assertEqual(expected, actual.value)
 
+        expected = non_unit_b.__rpow__(abs_non_unit_a)
+        actual = unit_b.__rpow__(abs_unit_a)
+        self.assertEqual(expected, actual.value)
+
         # Can raise negative value to rounded number.
+        if non_unit_b == 0.0:
+            non_unit_b = non_unit_b.__class__(1)
+
         rnd_non_unit_b = round(non_unit_b)
-        if rnd_non_unit_b == 0:
-            rnd_non_unit_b = round(non_unit_b + 1)
         rnd_unit_b = UnitsNumber(value=rnd_non_unit_b, units=unit_b.units)
         expected = pow(non_unit_a, rnd_non_unit_b)
         actual = pow(unit_a, rnd_unit_b)
+
         self.assertEqual(expected, actual.value)
 
-        #TODO rpow
+    def assert_pow_raises(self, non_unit_a, non_unit_b, unit_a, unit_b):
+        non_unit_a = non_unit_a.__class__(0)
+        unit_a = unit_a.__class__(0, units=unit_a.units)
+
+        if non_unit_b < 0:
+            self.assertRaises(ZeroDivisionError, pow, non_unit_a, non_unit_b)
+            self.assertRaises(ZeroDivisionError, pow, unit_a, unit_b)
+        else:
+            expected = pow(non_unit_a, non_unit_b)
+            actual = pow(unit_a, unit_b)
+            self.assertEqual(expected, actual.value)
 
     def assert_math_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
         msg = ('Invalid result for {0}:\n'
@@ -162,3 +185,13 @@ class TestUnitNumber(unittest.TestCase):
                 self.assert_comparisons_equal(a, b, a_unit, b_unit)
                 self.assert_pow_equal(a, b, a_unit, b_unit)
                 self.assert_math_equal(a, b, a_unit, b_unit)
+                self.assert_pow_raises(a, b, a_unit, b_unit)
+
+        for a, b in permutations((0.0, -0.0, 1.0, -1.0), 2):
+            a_unit = UnitsNumber(a, units=None)
+            b_unit = UnitsNumber(b, units=None)
+
+            self.assert_comparisons_equal(a, b, a_unit, b_unit)
+            self.assert_pow_equal(a, b, a_unit, b_unit)
+            self.assert_math_equal(a, b, a_unit, b_unit)
+            self.assert_pow_raises(a, b, a_unit, b_unit)

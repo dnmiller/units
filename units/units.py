@@ -44,12 +44,18 @@ class UnitsNumber(numbers.Real):
     def in_self_units(self, other):
         return other.value
 
+    def __compare_to(self, other):
+        if hasattr(other, 'units'):
+            return self.in_self_units(other)
+        else:
+            raise UnitsError('cannot compare to unit-less number')
+
     # Comparison operators
     def __wrap_cmp(op_name):
         op = getattr(operator, op_name)
 
         def wrapped_op(self, other):
-            return op(self.value, self.in_self_units(other))
+            return op(self.value, self.__compare_to(other))
         return wrapped_op
 
     __lt__ = __wrap_cmp('__lt__')
