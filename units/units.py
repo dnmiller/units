@@ -8,6 +8,10 @@ class UnitsError(Exception):
 
 
 class Units(numbers.Real):
+    """
+    Notes:
+        - Does not support bitwise operations.
+    """
     valid_units = None
     _error_messages = {
         'bad units':    'Invalid units {0}.'}
@@ -66,40 +70,72 @@ class Units(numbers.Real):
     __gt__ = __wrap_cmp('__gt__')
 
     # Math operators
+    def __non_scaling_op(self, other):
+        if hasattr(other, 'units'):
+            return self.in_self_units(other)
+        else:
+            raise UnitsError('cannot add/subtract with unit-less number')
+
     def __wrap_math(op_name):
         op = getattr(operator, op_name)
 
-        def wrapped_math(self, other):
+        def wrapped_op(self, other):
             return self.__class__(
-                value=op(self.value, self.in_self_units(other)),
+                value=op(self.value, self.__non_scaling_op(other)),
                 units=self.units)
-        return wrapped_math
+        return wrapped_op
 
     __add__ = __wrap_math('__add__')
-    __div__ = __wrap_math('__div__')
-    __mul__ = __wrap_math('__mul__')
-    __mod__ = __wrap_math('__mod__')
     __pow__ = __wrap_math('__pow__')
-    __truediv__ = __wrap_math('__truediv__')
-    __floordiv__ = __wrap_math('__floordiv__')
+
+    def __scaling_op(self, other):
+        if hasattr(other, 'units'):
+            return self.in_self_units(other)
+        else:
+            return other
+
+    def __wrap_scaling(op_name):
+        op = getattr(operator, op_name)
+
+        def wrapped_op(self, other):
+            return self.__class__(
+                value=op(self.value, self.__scaling_op(other)),
+                units=self.units)
+        return wrapped_op
+
+    __div__ = __wrap_scaling('__div__')
+    __mul__ = __wrap_scaling('__mul__')
+    __mod__ = __wrap_scaling('__mod__')
+    __truediv__ = __wrap_scaling('__truediv__')
+    __floordiv__ = __wrap_scaling('__floordiv__')
 
     # R-math operators
     def __wrap_rmath(op_name):
         op = getattr(operator, op_name)
 
-        def wrapped_rmath(self, other):
+        def wrapped_op(self, other):
             return self.__class__(
-                value=op(self.in_self_units(other), self.value),
+                value=op(self.__non_scaling_op(other), self.value),
                 units=self.units)
-        return wrapped_rmath
+        return wrapped_op
 
     __radd__ = __wrap_rmath('__add__')
-    __rmod__ = __wrap_rmath('__mod__')
-    __rmul__ = __wrap_rmath('__mul__')
     __rpow__ = __wrap_rmath('__pow__')
-    __rdiv__ = __wrap_rmath('__div__')
-    __rtruediv__ = __wrap_rmath('__truediv__')
-    __rfloordiv__ = __wrap_rmath('__floordiv__')
+
+    def __wrap_rscaling(op_name):
+        op = getattr(operator, op_name)
+
+        def wrapped_op(self, other):
+            return self.__class__(
+                value=op(self.__scaling_op(other), self.value),
+                units=self.units)
+        return wrapped_op
+
+    __rmod__ = __wrap_rscaling('__mod__')
+    __rmul__ = __wrap_rscaling('__mul__')
+    __rdiv__ = __wrap_rscaling('__div__')
+    __rtruediv__ = __wrap_rscaling('__truediv__')
+    __rfloordiv__ = __wrap_rscaling('__floordiv__')
 
     # Unitary operators
     def __wrap_unitary(op_name):
@@ -120,3 +156,6 @@ class Units(numbers.Real):
 
     def __float__(self):
         return float(self.value)
+
+    def __len__(self):
+        return len(self.value)

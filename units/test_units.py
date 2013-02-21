@@ -1,7 +1,8 @@
 # -*- coding: iso-8859-1 -*-
 import unittest
 import random
-from itertools import permutations
+import operator
+from itertools import permutations, product
 
 from units import Units, UnitsError
 
@@ -12,22 +13,52 @@ test_type_generators = (
     # int generator
     lambda: random.randint(-100, 100))
 
-test_math_operations = (
-    # Math operators
-    '__add__',
+
+# A TODO list
+test_etc_ops = ('is_', 'is_not', 'pow', 'ipow', 'concat', 'contains',
+                'iconcat')
+
+# Note: we still have to test for __cmp__ in Python 2
+get_op = lambda name: getattr(operator, name)
+
+test_comparison_ops = map(get_op, (
+    'lt', 'le', 'eq', 'ne', 'ge', 'gt'))
+
+test_unitary_ops = map(get_op, (
+    'abs', 'index', 'neg', 'pos'))
+
+test_additive_ops = map(get_op, (
+    'add', 'sub'))
+
+test_multiplicitive_ops = map(get_op, (
+    'div', 'floordiv', 'mod', 'mul', 'truediv'))
+
+test_in_place_additive_ops = map(get_op, (
+    'iadd', 'isub'))
+
+test_in_place_multiplicitive_ops = map(get_op, (
+    'idiv', 'ifloordiv', 'imod', 'imul', 'itruediv'))
+
+test_scaling_operations = [
     '__div__',
     '__mul__',
     '__mod__',
     '__truediv__',
     '__floordiv__',
 
-    # R-math operators
-    '__radd__',
     '__rmod__',
     '__rmul__',
     '__rdiv__',
     '__rtruediv__',
-    '__rfloordiv__')
+    '__rfloordiv__']
+
+test_non_scaling_operations = [
+    # Math operators
+    '__add__',
+    '__radd__']
+
+test_math_operations = (
+    test_non_scaling_operations + test_scaling_operations)
 
 test_comparison_operations = (
     # Comparison operators
@@ -49,32 +80,47 @@ wut = (
     '__float__')
 
 
+# Int types have __cmp__ in python 2. This maps the other comparison operators
+# to the values returned by __cmp__.
+cmp_map = {
+    '__lt__': {-1: True,  0: False, 1: False},
+    '__le__': {-1: True,  0: True,  1: False},
+    '__eq__': {-1: False, 0: True,  1: False},
+    '__ne__': {-1: True,  0: False, 1: True},
+    '__ge__': {-1: False, 0: True,  1: True},
+    '__gt__': {-1: False, 0: False, 1: True}}
+
+
 class TestUnitNumber(unittest.TestCase):
-    def assert_comparisons_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
-        self.assertEqual(non_unit_a, unit_a.value)
-        self.assertEqual(non_unit_b, unit_b.value)
+    def assert_comparisons_equal(self, base_set, test_set):
+        """
+        Assert that comparison operations on the two sets produce the same
+        results.
+        """
+        msg = ('Operator {0} return different results:\n'
+               'base set, ({1}, {2}): {3}\n'
+               'test set, ({4}, {5}): {6}')
 
-        # Int types have __cmp__ in python 2.
-        cmp_map = {
-            '__lt__': {-1: True,  0: False, 1: False},
-            '__le__': {-1: True,  0: True,  1: False},
-            '__eq__': {-1: False, 0: True,  1: False},
-            '__ne__': {-1: True,  0: False, 1: True},
-            '__ge__': {-1: False, 0: True,  1: True},
-            '__gt__': {-1: False, 0: False, 1: True}}
+        for op in test_comparison_ops:
+            expected = op(base_set[0], base_set[1])
+            actual = op(test_set[0], test_set[1])
+            self.assertEqual(expected, actual, msg.format(
+                op, base_set[0], base_set[1], expected,
+                test_set[0], test_set[1], actual))
 
-        cmp_msg = '{0} does not have __cmp__ or {1}'.format
-        neq_msg = 'For operator {0}\nExpected: {1}\nActual: {2}\n'.format
-        for op_name in test_comparison_operations:
-            if hasattr(non_unit_a, '__cmp__'):
-                expected = cmp_map[op_name][non_unit_a.__cmp__(non_unit_b)]
-            else:
-                if not hasattr(non_unit_a, op_name):
-                    self.fail(cmp_msg(type(non_unit_a, op_name)))
-                expected = getattr(non_unit_a, op_name)(non_unit_b)
-            actual = getattr(unit_a, op_name)(unit_b)
-            self.assertEqual(expected, actual,
-                             neq_msg(op_name, expected, actual))
+            expected = op(base_set[1], base_set[0])
+            actual = op(test_set[1], test_set[0])
+            self.assertEqual(expected, actual, msg.format(
+                op, base_set[1], base_set[0], expected,
+                test_set[1], test_set[0], actual))
+
+    def assert_comparisons_raise(self, a, b):
+        """
+        Assert that comparisons between the two arguments raise UnitsError.
+        """
+        for op in test_comparison_ops:
+            self.assertRaisesRegexp(UnitsError, 'compare', op, a, b)
+            self.assertRaisesRegexp(UnitsError, 'compare', op, b, a)
 
     def assert_pow_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
         self.assertEqual(non_unit_a, unit_a.value)
@@ -172,9 +218,21 @@ class TestUnitNumber(unittest.TestCase):
         self.assertRaisesRegexp(
             UnitsError, msg, Units, value=0, units=bad_units)
 
+    def test_comparisons(self):
+        """
+        Comparison operations produce expected results.
+        """
+        for i in xrange(100):
+            for gen in test_type_generators:
+                base_set = [gen(), gen()]
+                test_set = map(Units, base_set)
+                self.assert_comparisons_equal(test_set, base_set)
+                for a, b in product(base_set, test_set):
+                    self.assert_comparisons_raise(a, b)
+
     def test_math_ops_with_no_units(self):
         """
-        Math operations on unit-less numbers.
+        Math operations on Units with both units None.
         """
         for i in xrange(100):
             for gen in test_type_generators:
@@ -182,7 +240,6 @@ class TestUnitNumber(unittest.TestCase):
                 a_unit = Units(a, units=None)
                 b_unit = Units(b, units=None)
 
-                self.assert_comparisons_equal(a, b, a_unit, b_unit)
                 self.assert_pow_equal(a, b, a_unit, b_unit)
                 self.assert_math_equal(a, b, a_unit, b_unit)
                 self.assert_pow_raises(a, b, a_unit, b_unit)
@@ -191,7 +248,37 @@ class TestUnitNumber(unittest.TestCase):
             a_unit = Units(a, units=None)
             b_unit = Units(b, units=None)
 
-            self.assert_comparisons_equal(a, b, a_unit, b_unit)
             self.assert_pow_equal(a, b, a_unit, b_unit)
             self.assert_math_equal(a, b, a_unit, b_unit)
             self.assert_pow_raises(a, b, a_unit, b_unit)
+
+    def test_math_ops_with_single_units(self):
+        """
+        Math operations on Units and other types.
+        """
+        for i in xrange(100):
+            for gen in test_type_generators:
+                num = gen()
+                num_unit = Units(gen(), units=None)
+
+                for op_name in test_comparison_operations:
+                    # Getting the operator from the number's attribute
+                    # results in NotImplemented.
+                    op = getattr(operator, op_name)
+                    self.assertRaisesRegexp(
+                        UnitsError, 'cannot compare', op, num, num_unit)
+                for op_name in test_non_scaling_operations:
+                    if hasattr(operator, op_name):
+                        op = getattr(operator, op_name)
+                        self.assertRaisesRegexp(
+                            UnitsError, 'cannot add/subtract', op, num,
+                            num_unit)
+                    if hasattr(num, op_name):
+                        op = getattr(num, op_name)
+                        try:
+                            result = op(num_unit)
+                            self.assertEqual(result, NotImplemented)
+                        except UnitsError:
+                            self.assertRaisesRegexp(
+                                UnitsError, 'cannot add/subtract', op,
+                                num_unit)
