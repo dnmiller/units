@@ -7,18 +7,43 @@ from itertools import permutations, product
 from units import Units, UnitsError
 
 
-test_type_generators = (
+test_type_generators = [
     # float generator
     lambda: random.uniform(-100.0, 100.0),
     # int generator
-    lambda: random.randint(-100, 100))
+    lambda: random.randint(-100, 100)]
+
+try:
+    import numpy as np
+    from numpy.random import randn, randint
+
+    np_float_types = ('float16', 'float32', 'float64', 'float128')
+    np_float_generators = [
+        lambda: getattr(np, ft)(randn()) for ft in np_float_types]
+
+    np_int_types = ('int8', 'int16', 'int32', 'int64')
+    np_int_generators = [
+        lambda: getattr(np, it)(randint(-10, 10)) for it in np_int_types]
+
+    np_uint_types = ('uint8', 'uint16', 'uint32', 'uint64')
+    np_uint_generators = [
+        lambda: getattr(np, ut)(randint(0, 20)) for ut in np_uint_types]
+
+    np_complex_types = ('complex64', 'complex128', 'complex256')
+    np_complex_generators = [
+        lambda: getattr(np, cp)(randn()) for cp in np_complex_types]
+
+except ImportError:
+    np_float_generators = []
+    np_int_generators = []
+    np_uint_generators = []
+    np_complex_generators = []
 
 
 # A TODO list
 test_etc_ops = ('is_', 'is_not', 'pow', 'ipow', 'concat', 'contains',
                 'iconcat')
 
-# Note: we still have to test for __cmp__ in Python 2
 get_op = lambda name: getattr(operator, name)
 
 test_comparison_ops = map(get_op, (
@@ -78,17 +103,6 @@ test_unitary_operations = (
 wut = (
     '__trunc__',
     '__float__')
-
-
-# Int types have __cmp__ in python 2. This maps the other comparison operators
-# to the values returned by __cmp__.
-cmp_map = {
-    '__lt__': {-1: True,  0: False, 1: False},
-    '__le__': {-1: True,  0: True,  1: False},
-    '__eq__': {-1: False, 0: True,  1: False},
-    '__ne__': {-1: True,  0: False, 1: True},
-    '__ge__': {-1: False, 0: True,  1: True},
-    '__gt__': {-1: False, 0: False, 1: True}}
 
 
 class TestUnitNumber(unittest.TestCase):
@@ -222,15 +236,28 @@ class TestUnitNumber(unittest.TestCase):
         """
         Comparison operations produce expected results.
         """
-        for i in xrange(100):
-            for gen in test_type_generators:
-                base_set = [gen(), gen()]
+        for i in xrange(50):
+            type_gens = (
+                test_type_generators +
+                np_float_generators +
+                np_int_generators +
+                np_uint_generators)
+            for gen in type_gens:
+                base_set = (gen(), gen())
                 test_set = map(Units, base_set)
                 self.assert_comparisons_equal(test_set, base_set)
                 for a, b in product(base_set, test_set):
                     self.assert_comparisons_raise(a, b)
 
-    def test_math_ops_with_no_units(self):
+        # We also want the expected ordering errors for complex numbers.
+        for gen in np_complex_generators:
+            for op in test_comparison_ops:
+                base_set = (gen(), gen())
+                test_set = map(Units, base_set)
+                self.assertRaises(TypeError, 'ordering', op, *base_set)
+                self.assertRaises(TypeError, 'ordering', op, *test_set)
+
+    def _test_math_ops_with_no_units(self):
         """
         Math operations on Units with both units None.
         """
@@ -252,7 +279,7 @@ class TestUnitNumber(unittest.TestCase):
             self.assert_math_equal(a, b, a_unit, b_unit)
             self.assert_pow_raises(a, b, a_unit, b_unit)
 
-    def test_math_ops_with_single_units(self):
+    def _test_math_ops_with_single_units(self):
         """
         Math operations on Units and other types.
         """
