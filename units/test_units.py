@@ -3,7 +3,7 @@ import unittest
 import random
 from itertools import permutations
 
-from units import UnitsNumber, UnitsError
+from units import Units, UnitsError
 
 
 test_type_generators = (
@@ -87,7 +87,7 @@ class TestUnitNumber(unittest.TestCase):
 
         # Cannot raise negative value to a fraction.
         abs_non_unit_a = abs(non_unit_a)
-        abs_unit_a = UnitsNumber(value=abs_non_unit_a, units=unit_a.units)
+        abs_unit_a = Units(value=abs_non_unit_a, units=unit_a.units)
         expected = pow(abs_non_unit_a, non_unit_b)
         actual = pow(abs_unit_a, unit_b)
         self.assertEqual(expected, actual.value)
@@ -101,7 +101,7 @@ class TestUnitNumber(unittest.TestCase):
             non_unit_b = non_unit_b.__class__(1)
 
         rnd_non_unit_b = round(non_unit_b)
-        rnd_unit_b = UnitsNumber(value=rnd_non_unit_b, units=unit_b.units)
+        rnd_unit_b = Units(value=rnd_non_unit_b, units=unit_b.units)
         expected = pow(non_unit_a, rnd_non_unit_b)
         actual = pow(unit_a, rnd_unit_b)
 
@@ -121,7 +121,7 @@ class TestUnitNumber(unittest.TestCase):
 
     def assert_math_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
         msg = ('Invalid result for {0}:\n'
-               'UnitsNumber:      {1}\n'
+               'Units:            {1}\n'
                'Base type result: {2}\n'
                'Base type:        {3}')
         for op_name in test_math_operations:
@@ -137,26 +137,26 @@ class TestUnitNumber(unittest.TestCase):
                              op_name, units, expected, type(non_unit_a)))
 
     def tearDown(self):
-        UnitsNumber.valid_units = None
+        Units.valid_units = None
 
     def test_units_set(self):
         """
         Setting units attribute behaves correctly.
         """
-        UnitsNumber(0, 'ok')
-        UnitsNumber.valid_units = ('good',)
-        UnitsNumber(0, 'good')
+        Units(0, 'ok')
+        Units.valid_units = ('good',)
+        Units(0, 'good')
 
     def test_str_and_repr(self):
         """
         String representations correctly created.
         """
-        num = UnitsNumber(value=0, units='ok')
+        num = Units(value=0, units='ok')
         expected = '0ok'
         actual = str(num)
         self.assertEqual(expected, actual)
 
-        expected = "UnitsNumber(value=0, units='ok')"
+        expected = "Units(value=0, units='ok')"
         actual = num.__repr__()
         self.assertEqual(expected, actual)
         exec('expected = ' + num.__repr__())
@@ -166,11 +166,11 @@ class TestUnitNumber(unittest.TestCase):
         """
         Invalid units set wrong.
         """
-        UnitsNumber.valid_units = ('good',)
+        Units.valid_units = ('good',)
         bad_units = 'bad'
-        msg = UnitsNumber._error_messages['bad units'].format(bad_units)
+        msg = Units._error_messages['bad units'].format(bad_units)
         self.assertRaisesRegexp(
-            UnitsError, msg, UnitsNumber, value=0, units=bad_units)
+            UnitsError, msg, Units, value=0, units=bad_units)
 
     def test_math_ops_with_no_units(self):
         """
@@ -179,8 +179,8 @@ class TestUnitNumber(unittest.TestCase):
         for i in xrange(100):
             for gen in test_type_generators:
                 a, b = gen(), gen()
-                a_unit = UnitsNumber(a, units=None)
-                b_unit = UnitsNumber(b, units=None)
+                a_unit = Units(a, units=None)
+                b_unit = Units(b, units=None)
 
                 self.assert_comparisons_equal(a, b, a_unit, b_unit)
                 self.assert_pow_equal(a, b, a_unit, b_unit)
@@ -188,8 +188,8 @@ class TestUnitNumber(unittest.TestCase):
                 self.assert_pow_raises(a, b, a_unit, b_unit)
 
         for a, b in permutations((0.0, -0.0, 1.0, -1.0), 2):
-            a_unit = UnitsNumber(a, units=None)
-            b_unit = UnitsNumber(b, units=None)
+            a_unit = Units(a, units=None)
+            b_unit = Units(b, units=None)
 
             self.assert_comparisons_equal(a, b, a_unit, b_unit)
             self.assert_pow_equal(a, b, a_unit, b_unit)

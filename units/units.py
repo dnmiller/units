@@ -7,7 +7,7 @@ class UnitsError(Exception):
     pass
 
 
-class UnitsNumber(numbers.Real):
+class Units(numbers.Real):
     valid_units = None
     _error_messages = {
         'bad units':    'Invalid units {0}.'}
