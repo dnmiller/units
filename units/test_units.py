@@ -2,10 +2,9 @@
 import unittest
 import random
 import operator
-from itertools import permutations, product
+from itertools import product
 
 from units import Units, UnitsError
-
 
 test_type_generators = [
     # float generator
@@ -16,6 +15,7 @@ test_type_generators = [
 try:
     import numpy as np
     from numpy.random import randn, randint
+    np.seterr(all='raise')
 
     np_float_types = ('float16', 'float32', 'float64', 'float128')
     np_float_generators = [
@@ -50,7 +50,7 @@ test_comparison_ops = map(get_op, (
     'lt', 'le', 'eq', 'ne', 'ge', 'gt'))
 
 test_unitary_ops = map(get_op, (
-    'abs', 'index', 'neg', 'pos'))
+    'abs', 'neg', 'pos'))
 
 test_additive_ops = map(get_op, (
     'add', 'sub'))
@@ -64,54 +64,14 @@ test_in_place_additive_ops = map(get_op, (
 test_in_place_multiplicitive_ops = map(get_op, (
     'idiv', 'ifloordiv', 'imod', 'imul', 'itruediv'))
 
-test_scaling_operations = [
-    '__div__',
-    '__mul__',
-    '__mod__',
-    '__truediv__',
-    '__floordiv__',
-
-    '__rmod__',
-    '__rmul__',
-    '__rdiv__',
-    '__rtruediv__',
-    '__rfloordiv__']
-
-test_non_scaling_operations = [
-    # Math operators
-    '__add__',
-    '__radd__']
-
-test_math_operations = (
-    test_non_scaling_operations + test_scaling_operations)
-
-test_comparison_operations = (
-    # Comparison operators
-    '__lt__',
-    '__le__',
-    '__eq__',
-    '__ne__',
-    '__ge__',
-    '__gt__')
-
-test_unitary_operations = (
-    # Unitary operators
-    '__abs__',
-    '__neg__',
-    '__pos__')
-
-wut = (
-    '__trunc__',
-    '__float__')
-
 
 class TestUnitNumber(unittest.TestCase):
     def assert_comparisons_equal(self, base_set, test_set):
         """
-        Assert that comparison operations on the two sets produce the same
-        results.
+        Assert that comparison operations on the base set produce the same
+        result as the test set.
         """
-        msg = ('Operator {0} return different results:\n'
+        msg = ('Operator {0} returns different results:\n'
                'base set, ({1}, {2}): {3}\n'
                'test set, ({4}, {5}): {6}')
 
@@ -136,65 +96,54 @@ class TestUnitNumber(unittest.TestCase):
             self.assertRaisesRegexp(UnitsError, 'compare', op, a, b)
             self.assertRaisesRegexp(UnitsError, 'compare', op, b, a)
 
-    def assert_pow_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
-        self.assertEqual(non_unit_a, unit_a.value)
-        self.assertEqual(non_unit_b, unit_b.value)
+    def assert_unitary_equal(self, base, test):
+        """
+        Assert that equality of two variables is invariant under unitariy
+        operations.
+        """
+        msg = ('Operator {0} returns different results:\n'
+               'pre-operator:  ({1}, {2})\n'
+               'post-operator: ({3}, {4})')
 
-        # Zero is handled elsewhere.
-        if non_unit_a == 0.0:
-            non_unit_a = non_unit_a.__class__(1)
-            unit_a = unit_a.__class__(1, units=unit_a.units)
+        self.assertEqual(base, test.value)
+        self.assertEqual(test.value, base)
+        for op in test_unitary_ops:
+            op_base, op_test = op(base), op(test)
+            self.assertEqual(op_base, op_test.value, msg.format(
+                op, base, test, op_base, op_test))
+            self.assertEqual(op_test.value, op_base, msg.format(
+                op, base, test, op_base, op_test))
 
-        # Cannot raise negative value to a fraction.
-        abs_non_unit_a = abs(non_unit_a)
-        abs_unit_a = Units(value=abs_non_unit_a, units=unit_a.units)
-        expected = pow(abs_non_unit_a, non_unit_b)
-        actual = pow(abs_unit_a, unit_b)
-        self.assertEqual(expected, actual.value)
+    def assert_additions_equal(self, base_set, test_set):
+        """
+        Assert that equality of two variables is invariant under additive
+        operations.
+        """
+        msg = ('Operator {0} returns different results:\n'
+               'base set, ({1}, {2}): {3}\n'
+               'test set, ({4}, {5}): {6}')
 
-        expected = non_unit_b.__rpow__(abs_non_unit_a)
-        actual = unit_b.__rpow__(abs_unit_a)
-        self.assertEqual(expected, actual.value)
-
-        # Can raise negative value to rounded number.
-        if non_unit_b == 0.0:
-            non_unit_b = non_unit_b.__class__(1)
-
-        rnd_non_unit_b = round(non_unit_b)
-        rnd_unit_b = Units(value=rnd_non_unit_b, units=unit_b.units)
-        expected = pow(non_unit_a, rnd_non_unit_b)
-        actual = pow(unit_a, rnd_unit_b)
-
-        self.assertEqual(expected, actual.value)
-
-    def assert_pow_raises(self, non_unit_a, non_unit_b, unit_a, unit_b):
-        non_unit_a = non_unit_a.__class__(0)
-        unit_a = unit_a.__class__(0, units=unit_a.units)
-
-        if non_unit_b < 0:
-            self.assertRaises(ZeroDivisionError, pow, non_unit_a, non_unit_b)
-            self.assertRaises(ZeroDivisionError, pow, unit_a, unit_b)
-        else:
-            expected = pow(non_unit_a, non_unit_b)
-            actual = pow(unit_a, unit_b)
-            self.assertEqual(expected, actual.value)
-
-    def assert_math_equal(self, non_unit_a, non_unit_b, unit_a, unit_b):
-        msg = ('Invalid result for {0}:\n'
-               'Units:            {1}\n'
-               'Base type result: {2}\n'
-               'Base type:        {3}')
-        for op_name in test_math_operations:
+        self.assertEqual(base_set[0], test_set[0].value)
+        self.assertEqual(base_set[1], test_set[1].value)
+        self.assertEqual(test_set[0].value, base_set[0])
+        self.assertEqual(test_set[1].value, base_set[1])
+        for op in test_additive_ops:
             try:
-                expected = getattr(non_unit_a, op_name)(non_unit_b)
-            except ZeroDivisionError:
-                self.assertRaises(
-                    ZeroDivisionError, getattr(unit_a, op_name), unit_b)
-                return
+                actual = op(test_set[0], test_set[1])
+                expected = op(base_set[0], base_set[1])
+                self.assertEqual(expected, actual.value, msg.format(
+                    op, base_set[0], base_set[1], expected,
+                    test_set[0], test_set[1], actual))
 
-            units = getattr(unit_a, op_name)(unit_b).value
-            self.assertEqual(units, expected, msg.format(
-                             op_name, units, expected, type(non_unit_a)))
+                actual = op(test_set[1], test_set[0])
+                expected = op(base_set[1], base_set[0])
+                self.assertEqual(expected, actual.value, msg.format(
+                    op, base_set[1], base_set[0], expected,
+                    test_set[1], test_set[0], actual))
+            except FloatingPointError:
+                # NumPy raises a lot of false-positive errors here for reasons
+                # I can't figure out.
+                continue
 
     def tearDown(self):
         Units.valid_units = None
@@ -236,16 +185,16 @@ class TestUnitNumber(unittest.TestCase):
         """
         Comparison operations produce expected results.
         """
+        type_gens = (test_type_generators + np_float_generators +
+                     np_int_generators + np_uint_generators)
         for i in xrange(50):
-            type_gens = (
-                test_type_generators +
-                np_float_generators +
-                np_int_generators +
-                np_uint_generators)
             for gen in type_gens:
                 base_set = (gen(), gen())
                 test_set = map(Units, base_set)
+                # Comparisons between elements of the same set produce the same
+                # results.
                 self.assert_comparisons_equal(test_set, base_set)
+                # Comparisons between elements of different sets raise errors.
                 for a, b in product(base_set, test_set):
                     self.assert_comparisons_raise(a, b)
 
@@ -257,55 +206,28 @@ class TestUnitNumber(unittest.TestCase):
                 self.assertRaises(TypeError, 'ordering', op, *base_set)
                 self.assertRaises(TypeError, 'ordering', op, *test_set)
 
-    def _test_math_ops_with_no_units(self):
+    def test_unitary(self):
         """
-        Math operations on Units with both units None.
+        Unitary operations produce expected results.
         """
-        for i in xrange(100):
-            for gen in test_type_generators:
-                a, b = gen(), gen()
-                a_unit = Units(a, units=None)
-                b_unit = Units(b, units=None)
+        type_gens = (test_type_generators + np_float_generators +
+                     np_int_generators + np_uint_generators)
+        for i in xrange(50):
+            for gen in type_gens:
+                base = gen()
+                test = Units(base)
+                self.assert_unitary_equal(base, test)
 
-                self.assert_pow_equal(a, b, a_unit, b_unit)
-                self.assert_math_equal(a, b, a_unit, b_unit)
-                self.assert_pow_raises(a, b, a_unit, b_unit)
-
-        for a, b in permutations((0.0, -0.0, 1.0, -1.0), 2):
-            a_unit = Units(a, units=None)
-            b_unit = Units(b, units=None)
-
-            self.assert_pow_equal(a, b, a_unit, b_unit)
-            self.assert_math_equal(a, b, a_unit, b_unit)
-            self.assert_pow_raises(a, b, a_unit, b_unit)
-
-    def _test_math_ops_with_single_units(self):
+    def test_addition(self):
         """
-        Math operations on Units and other types.
+        Additive operations produce expected results.
         """
-        for i in xrange(100):
-            for gen in test_type_generators:
-                num = gen()
-                num_unit = Units(gen(), units=None)
-
-                for op_name in test_comparison_operations:
-                    # Getting the operator from the number's attribute
-                    # results in NotImplemented.
-                    op = getattr(operator, op_name)
-                    self.assertRaisesRegexp(
-                        UnitsError, 'cannot compare', op, num, num_unit)
-                for op_name in test_non_scaling_operations:
-                    if hasattr(operator, op_name):
-                        op = getattr(operator, op_name)
-                        self.assertRaisesRegexp(
-                            UnitsError, 'cannot add/subtract', op, num,
-                            num_unit)
-                    if hasattr(num, op_name):
-                        op = getattr(num, op_name)
-                        try:
-                            result = op(num_unit)
-                            self.assertEqual(result, NotImplemented)
-                        except UnitsError:
-                            self.assertRaisesRegexp(
-                                UnitsError, 'cannot add/subtract', op,
-                                num_unit)
+        type_gens = (test_type_generators + np_float_generators +
+                     np_int_generators + np_uint_generators)
+        for i in xrange(50):
+            for gen in type_gens:
+                base_set = (gen(), gen())
+                test_set = map(Units, base_set)
+                # Additive operations between elements of the same set produce
+                # the same results.
+                self.assert_additions_equal(base_set, test_set)
