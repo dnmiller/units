@@ -119,31 +119,25 @@ class TestUnitNumber(unittest.TestCase):
         Assert that equality of two variables is invariant under additive
         operations.
         """
-        msg = ('Operator {0} returns different results:\n'
-               'base set, ({1}, {2}): {3}\n'
-               'test set, ({4}, {5}): {6}')
+        msg = ('Operator {0} returns different results:\n' +
+               'base set, ({0}, {1}):'.format(*base_set) + ' {1}\n'
+               'test set, ({0}, {1}):'.format(*test_set) + ' {2}\n')
 
         self.assertEqual(base_set[0], test_set[0].value)
         self.assertEqual(base_set[1], test_set[1].value)
         self.assertEqual(test_set[0].value, base_set[0])
         self.assertEqual(test_set[1].value, base_set[1])
         for op in test_additive_ops:
+            # NumPy sometimes raises false-positive errors here for uint types
+            # for reasons I can't figure out. No overflow is actually
+            # occurring, and she values are still equal when compared.
             try:
                 actual = op(test_set[0], test_set[1])
                 expected = op(base_set[0], base_set[1])
-                self.assertEqual(expected, actual.value, msg.format(
-                    op, base_set[0], base_set[1], expected,
-                    test_set[0], test_set[1], actual))
-
-                actual = op(test_set[1], test_set[0])
-                expected = op(base_set[1], base_set[0])
-                self.assertEqual(expected, actual.value, msg.format(
-                    op, base_set[1], base_set[0], expected,
-                    test_set[1], test_set[0], actual))
             except FloatingPointError:
-                # NumPy raises a lot of false-positive errors here for reasons
-                # I can't figure out.
-                continue
+                pass
+            self.assertEqual(
+                expected, actual.value, msg.format(op, expected, actual))
 
     def tearDown(self):
         Units.valid_units = None
@@ -222,12 +216,24 @@ class TestUnitNumber(unittest.TestCase):
         """
         Additive operations produce expected results.
         """
-        type_gens = (test_type_generators + np_float_generators +
-                     np_int_generators + np_uint_generators)
-        for i in xrange(50):
-            for gen in type_gens:
-                base_set = (gen(), gen())
+        type_gens = (
+            test_type_generators + np_float_generators + np_int_generators)
+        for gen in type_gens:
+            for i in xrange(50):
+                base_set = [gen(), gen()]
                 test_set = map(Units, base_set)
                 # Additive operations between elements of the same set produce
                 # the same results.
+                self.assert_additions_equal(base_set, test_set)
+                base_set.reverse()
+                test_set.reverse()
+                self.assert_additions_equal(base_set, test_set)
+
+        # Doesn't do reverse for units. We don't want overflow for a - b
+        # where a < b.
+        for gen in np_uint_generators:
+            for i in xrange(50):
+                a, b = gen(), gen()
+                base_set = [a, b] if a > b else [b, a]
+                test_set = map(Units, base_set)
                 self.assert_additions_equal(base_set, test_set)
